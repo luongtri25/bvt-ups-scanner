@@ -2233,11 +2233,18 @@
 
     function closeScannerModal() {
       const modal = document.getElementById('modal-scanner');
-      modal.classList.remove('open');
+      if (modal) modal.classList.remove('open');
       if (html5QrCode) {
-        html5QrCode.stop().then(() => {
-          console.log('Scanner stopped.');
-        }).catch(() => {});
+        const scanner = html5QrCode;
+        html5QrCode = null;
+        try {
+          const p = scanner.stop();
+          if (p && typeof p.then === 'function') {
+            p.then(() => console.log('Scanner stopped.')).catch(() => {});
+          }
+        } catch (e) {
+          console.warn('Scanner stop skipped:', e);
+        }
       }
     }
 
