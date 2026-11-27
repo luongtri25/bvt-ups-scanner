@@ -1183,7 +1183,7 @@
     const STORAGE_KEY = 'BVTKH_UPS_SCANNER_V2';
 
     // Application state
-    let state = {
+    let state = window.state = {
       machines: [],
       scope: 'u5',           // 'u5' or 'all'
       selectedDept: '',
@@ -1196,7 +1196,7 @@
 
     let html5QrCode = null;
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isInGasIframe = (window.self !== window.top) && /script\.google\.com|googleusercontent\.com/i.test(window.location.href || document.referrer || '');
+    const isInGasIframe = window.isInGasIframe = (window.self !== window.top) && /script\.google\.com|googleusercontent\.com/i.test(window.location.href || document.referrer || '');
     let audioCtx = null;
 
     // Web Audio API Beep
@@ -1923,18 +1923,18 @@
     function normalizeOcrSerial(rawText) {
       if (!rawText) return null;
       // 1. Specific Santak pattern Jxxx followed by separator and alphanumeric
-      let m = rawText.match(/(J\d{3})[\s\-_]+([A-Z0-9]{8,14})/i);
+      let m = rawText.match(/(?:^|[^A-Z0-9])(J\d{3})[\s\-_]+([A-Z0-9]{8,14})(?:$|[^A-Z0-9])/i);
       if (!m) {
         // 2. Generic prefix (3-5 alphanumeric) + separator + suffix (8-14 alphanumeric)
-        m = rawText.match(/([A-Z0-9]{3,5})[\s\-_]+([A-Z0-9]{8,14})/i);
+        m = rawText.match(/(?:^|[^A-Z0-9])([A-Z0-9]{3,5})[\s\-_]+([A-Z0-9]{8,14})(?:$|[^A-Z0-9])/i);
       }
       if (!m) {
         // 3. Directly glued without separator e.g. J494A0492790184
-        m = rawText.match(/(J\d{3})([A-Z0-9]{8,14})/i);
+        m = rawText.match(/(?:^|[^A-Z0-9])(J\d{3})([A-Z0-9]{8,14})(?:$|[^A-Z0-9])/i);
       }
       if (!m) {
         // 4. Standard hyphenated format
-        m = rawText.match(/([A-Z0-9]{3,5})-([A-Z0-9]{8,14})/i);
+        m = rawText.match(/(?:^|[^A-Z0-9])([A-Z0-9]{3,5})-([A-Z0-9]{8,14})(?:$|[^A-Z0-9])/i);
       }
 
       if (m) {
