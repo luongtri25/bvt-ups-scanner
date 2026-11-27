@@ -1113,9 +1113,9 @@
           Mục tiêu: <span id="scanner-target-host" style="color: #60A5FA; font-family: var(--font-mono);">---</span>
         </div>
         <div style="display: flex; gap: 8px;">
-          <button class="scanner-ctrl-btn" onclick="triggerNativeCamera(state.activeScanTargetId)" title="Chụp ảnh / Nhận diện OCR khi tem mờ hoặc xước vạch">
+          <button class="scanner-ctrl-btn" onclick="triggerNativeCamera(state.activeScanTargetId)" title="Chụp ảnh / Nhận diện OCR khi tem mờ hoặc xước vạch" style="white-space: nowrap;">
             <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            <span>📷 Chụp ảnh / OCR</span>
+            <span>Chụp ảnh / OCR</span>
           </button>
           <button class="scanner-ctrl-btn" id="btn-toggle-flash" onclick="toggleFlashlight()">
             <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -1781,15 +1781,8 @@
       }
 
       try {
-        const feed = document.getElementById('camera-feed-container');
-        if (feed) feed.innerHTML = '';
-        html5QrCode = new Html5Qrcode('camera-feed-container', {
-          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-          verbose: false
-        });
-
-        // Khung quét ngang tối ưu riêng cho tem mã vạch 1D SANTAK
-        const config = {
+        // Base config cho khung quét ngang tối ưu riêng cho tem mã vạch 1D SANTAK
+        const baseConfig = {
           fps: 15,
           qrbox: (vw, vh) => ({
             width: Math.min(340, Math.floor(vw * 0.88)),
@@ -1807,9 +1800,18 @@
           ]
         };
 
-        const tryStartCamera = (constraintsList) => {
-          if (!constraintsList || constraintsList.length === 0) {
-            console.warn('All camera constraints exhausted.');
+        // Thử camera 1080p kèm Continuous Autofocus, fallback về 1080p cơ bản, fallback về mặc định
+        // Theo chuẩn Html5Qrcode: tham số 1 luôn chỉ có 1 key { facingMode: "environment" },
+        // các ràng buộc nâng cao (width, height, continuous focus) phải nằm trong config.videoConstraints!
+        const configsQueue = [
+          { ...baseConfig, videoConstraints: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: "continuous" }] } },
+          { ...baseConfig, videoConstraints: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } } },
+          baseConfig
+        ];
+
+        const tryStartCamera = (queue) => {
+          if (!queue || queue.length === 0) {
+            console.warn('All camera configs exhausted.');
             const feedEl = document.getElementById('camera-feed-container');
             if (feedEl) {
               feedEl.innerHTML = `
@@ -1819,7 +1821,7 @@
                   <div style="font-size:11.5px; color:#94A3B8; margin-bottom:14px; max-width:280px; line-height:1.4;">Vui lòng chọn hoặc chụp ảnh mã vạch để quét tự động</div>
                   <button type="button" class="btn btn-emerald btn-sm" onclick="triggerNativeCamera(state.activeScanTargetId)" style="padding:9px 14px; font-weight:700;">
                     <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                    📷 Chọn / Chụp Ảnh Barcode
+                    Chọn / Chụp Ảnh Barcode
                   </button>
                 </div>
               `;
@@ -1827,34 +1829,38 @@
             return;
           }
 
-          const current = constraintsList[0];
-          html5QrCode.start(
-            current,
-            config,
-            (decodedText) => {
-              handleScanSuccess(decodedText);
-            },
-            () => {} // Ignore scan frame failures
-          ).catch(err => {
-            console.warn('Camera constraints rejected, trying next:', current, err);
-            tryStartCamera(constraintsList.slice(1));
-          });
+          const curConfig = queue[0];
+          try {
+            const feed = document.getElementById('camera-feed-container');
+            if (feed) feed.innerHTML = '';
+            html5QrCode = new Html5Qrcode('camera-feed-container', {
+              experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+              verbose: false
+            });
+
+            html5QrCode.start(
+              { facingMode: "environment" },
+              curConfig,
+              (decodedText) => {
+                handleScanSuccess(decodedText);
+              },
+              () => {} // Ignore scan frame failures
+            ).catch(err => {
+              console.warn('Camera config failed, trying next fallback:', err);
+              tryStartCamera(queue.slice(1));
+            });
+          } catch (e) {
+            console.warn('Camera init exception, trying next fallback:', e);
+            tryStartCamera(queue.slice(1));
+          }
         };
 
-        // Thử camera 1080p kèm Continuous Autofocus, fallback về 1080p cơ bản, fallback về environment mặc định
-        const cameraQueue = [
-          { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: "continuous" }] },
-          { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-          { facingMode: "environment" }
-        ];
-
-        tryStartCamera(cameraQueue);
+        tryStartCamera(configsQueue);
       } catch (err) {
         alert('Lỗi khởi tạo Camera: ' + err.message);
       }
     }
 
-    // Native Camera File Picker for iOS iframe compatibility
     function triggerNativeCamera(targetId, hostname) {
       if (targetId) state.activeScanTargetId = targetId;
       const input = document.getElementById('native-cam-input');
